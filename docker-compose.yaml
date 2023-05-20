@@ -1,69 +1,201 @@
 version: "3"
 services:
-  mongo1:
-    container_name: mongo1
+##################################shard1
+  mongo11:
+    container_name: mongo11
     image: mongo
     expose:
       - 27017 
       - 27018
       - 27019
     ports:
-      - 30001:27017 
+      - 30011:27017 
     restart: always
-    command: mongod --replSet "rs0" --bind_ip localhost,mongo1 --port 27017 
-  mongo2:
-    container_name: mongo2
+    command: mongod --shardsvr --replSet "rs1" --bind_ip localhost,mongo11 --port 27017 
+  
+  mongo12:
+    container_name: mongo12
     image: mongo
     expose:
       - 27017 
       - 27018
       - 27019
     ports:
-      - 30002:27017
+      - 30012:27017
     restart: always
-    command: mongod --replSet "rs0" --bind_ip localhost,mongo2 --port 27017
-  mongo3:
-    container_name: mongo3
+    command: mongod --shardsvr --replSet "rs1" --bind_ip localhost,mongo12 --port 27017
+  
+  mongo13:
+    container_name: mongo13
     image: mongo
     expose:
       - 27017 
       - 27018
       - 27019
     ports:
-      - 30003:27017
+      - 30013:27017
     restart: always
-    command: mongod --replSet "rs0" --bind_ip localhost,mongo3 --port 27017
+    command: mongod --shardsvr --replSet "rs1" --bind_ip localhost,mongo13 --port 27017
+####################################### Shard2
+  mongo21:
+    container_name: mongo21
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30021:27017 
+    restart: always
+    command: mongod --shardsvr --replSet "rs2" --bind_ip localhost,mongo21 --port 27017 
+  
+  mongo22:
+    container_name: mongo22
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30022:27017
+    restart: always
+    command: mongod --shardsvr --replSet "rs2" --bind_ip localhost,mongo22 --port 27017
+  
+  mongo23:
+    container_name: mongo23
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30023:27017
+    restart: always
+    command: mongod --shardsvr --replSet "rs2" --bind_ip localhost,mongo23 --port 27017
 
-  mongoinit:
+##################################### ConFig Replica
+  config11:
+    container_name: config11
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30101:27017 
+    restart: always
+    command: mongod --configsvr --replSet "cfg1" --bind_ip localhost,config11 --port 27017 
+  
+  config12:
+    container_name: config12
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30102:27017
+    restart: always
+    command: mongod --configsvr --replSet "cfg1" --bind_ip localhost,config12 --port 27017
+  
+  config13:
+    container_name: config13
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30103:27017
+    restart: always
+    command: mongod --configsvr --replSet "cfg1" --bind_ip localhost,config13 --port 27017
+
+##################################### mongos
+  mongos:
+    container_name: mongos
+    image: mongo
+    expose:
+      - 27017 
+      - 27018
+      - 27019
+    ports:
+      - 30113:27017
+    restart: always
+    command: mongos --configdb cfg1/config11:27017,config12:27017,config13:27017 --bind_ip localhost,mongos --port 27017
+#################################### initialising
+  mongoinit1:
     image: mongo
     # this container will exit after executing the command
     restart: "no"
     depends_on:
-      - mongo1
-      - mongo2
-      - mongo3
+      - mongo11
+      - mongo12
+      - mongo13
     command: >
-      mongosh --host mongo1:27017 --eval '
+      mongosh --host mongo11:27017 --eval '
       config = {
-      _id : "rs0",
+      _id : "rs1",
       "members" : [
-        {
-          _id : 0,
-          host : "mongo1:27017"
-        },
-        {
-          _id : 1,
-          host : "mongo2:27017"
-        },
-        {
-          _id : 2,
-          host : "mongo3:27017"
-        }
-      ]
+        {_id : 0,host : "mongo11:27017"},
+        {_id : 1,host : "mongo12:27017"},
+        {_id : 2,host : "mongo13:27017"}]
+      };
+      rs.initiate(config);
+      ' 
+
+
+  mongoinit-cfg:
+    image: mongo
+    # this container will exit after executing the command
+    restart: "no"
+    depends_on:
+      - config11
+      - config12
+      - config13
+    command: >
+      mongosh --host config11:27017 --eval '
+      config = {
+      _id : "cfg1", configsvr: true,
+      "members" : [
+        {_id : 0,host : "config11:27017"},
+        {_id : 1,host : "config12:27017"},
+        {_id : 2,host : "config13:27017"}]
       };
       rs.initiate(config);
       '
-  
+
+  mongoinit2:
+    image: mongo
+    # this container will exit after executing the command
+    restart: "no"
+    depends_on:
+      - mongo21
+      - mongo22
+      - mongo23
+    command: >
+      mongosh --host mongo21:27017 --eval '
+      config = {
+      _id : "rs2",
+      "members" : [
+        {_id : 0,host : "mongo21:27017"},
+        {_id : 1,host : "mongo22:27017"},
+        {_id : 2,host : "mongo23:27017"}]
+      };
+      rs.initiate(config);
+      '
+  mongoinits:
+    image: mongo
+    # this container will exit after executing the command
+    restart: "no"
+    depends_on:
+      - mongos
+      - mongoinit-cfg
+    command: >
+      mongosh --host mongos:27017 --eval '
+      sh.addShard( "rs1/mongo11:27017,mongo12:27017,mongo13:27017")
+      sh.addShard( "rs2/mongo21:27017,mongo22:27017,mongo23:27017")
+      '
+
   app:
     image: node
     container_name: app

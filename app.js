@@ -10,3 +10,6 @@ require("mongoose").connect("mongodb://127.0.0.1:30001,127.0.0.1:30002,127.0.0.1
 
 
 require("mongoose").connect("mongodb://mongo1:27017,mongo2:27017,mongo3:27017/test?replicaSet=rs0").then(()=>{console.log("OK")}).catch((e)=>{console.log(e.message)})
+
+
+require("mongoose").connect("mongodb://mongos:27017/database").then(()=>{console.log("OK")}).catch((e)=>{console.log(e.message)})
